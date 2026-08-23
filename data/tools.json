@@ -611,7 +611,7 @@
       "icon": "bi-dice-5",
       "desc": "Generate random numbers in a range.",
       "badges": [],
-      "status": "soon"
+      "status": "ready"
     },
     {
       "id": "fake-user",
