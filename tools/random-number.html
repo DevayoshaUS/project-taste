@@ -1,0 +1,307 @@
+<!-- =========================================================================
+     Project Taste — tools/random-number.html
+     Cryptographically secure random number generator.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-dice-5"></i></div>
+  <div class="tool-header-text">
+    <h1>Random Number Generator</h1>
+    <p>Generate secure random numbers within any range, entirely in your browser.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="random-min">Minimum</label>
+      <input id="random-min" class="input-taste" type="number" value="1">
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="random-max">Maximum</label>
+      <input id="random-max" class="input-taste" type="number" value="100">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="field-label" for="random-count" style="margin:0 var(--sp-2) 0 0">
+      Quantity
+    </label>
+    <input id="random-count" class="input-taste" type="number"
+      min="1" max="500" value="5" style="width:90px">
+
+    <label class="check-inline">
+      <input type="checkbox" id="random-unique">
+      Unique values
+    </label>
+  </div>
+
+  <div id="random-status" class="random-status" hidden></div>
+
+  <div class="toolbar">
+    <button class="btn-taste btn-taste-primary" data-act="generate">
+      <i class="bi bi-dice-5"></i> Generate
+    </button>
+    <button class="btn-taste btn-taste-success" data-act="copyall">
+      <i class="bi bi-clipboard-check"></i> Copy All
+    </button>
+    <button class="btn-taste btn-taste-secondary" data-act="download">
+      <i class="bi bi-download"></i> Download
+    </button>
+    <button class="btn-taste btn-taste-ghost" data-act="sample">
+      <i class="bi bi-magic"></i> Sample
+    </button>
+    <button class="btn-taste btn-taste-ghost" data-act="clear">
+      <i class="bi bi-x-circle"></i> Clear
+    </button>
+  </div>
+
+  <div class="stat-row" id="random-stats"></div>
+  <ul class="result-list" id="random-results"></ul>
+</div>
+
+<style>
+  .random-status {
+    padding: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-3);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .random-status.err {
+    background: rgba(220, 38, 38, 0.12);
+    color: var(--danger);
+  }
+
+  .random-status.ok {
+    background: var(--badge-new-bg);
+    color: var(--badge-new-text);
+  }
+</style>
+
+<script>
+  window.TasteTools = window.TasteTools || {};
+
+  window.TasteTools['random-number'] = function (root, tool, Taste) {
+    'use strict';
+
+    var $ = Taste.$;
+    var el = Taste.el;
+
+    var minEl = $('#random-min', root);
+    var maxEl = $('#random-max', root);
+    var countEl = $('#random-count', root);
+    var uniqueEl = $('#random-unique', root);
+    var statusEl = $('#random-status', root);
+    var statsEl = $('#random-stats', root);
+    var resultsEl = $('#random-results', root);
+
+    var current = [];
+    var SAVE_KEY = 'tool:random-number:settings';
+
+    function showStatus(kind, message) {
+      statusEl.hidden = false;
+      statusEl.className = 'random-status ' + kind;
+      statusEl.innerHTML = '';
+
+      statusEl.appendChild(el('i', {
+        class: 'bi ' + (
+          kind === 'ok'
+            ? 'bi-check-circle-fill'
+            : 'bi-exclamation-triangle-fill'
+        )
+      }));
+
+      statusEl.appendChild(el('span', { text: message }));
+    }
+
+    function randomUint32() {
+      var bytes = new Uint32Array(1);
+      crypto.getRandomValues(bytes);
+      return bytes[0];
+    }
+
+    function randomInteger(min, max) {
+      var range = max - min + 1;
+      var limit = 0x100000000 - (0x100000000 % range);
+      var value;
+
+      do {
+        value = randomUint32();
+      } while (value >= limit);
+
+      return min + (value % range);
+    }
+
+    function readSettings() {
+      var min = Number(minEl.value);
+      var max = Number(maxEl.value);
+      var count = Math.max(1, Math.min(500, parseInt(countEl.value, 10) || 1));
+
+      if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
+        showStatus('err', 'Minimum and maximum must be whole numbers.');
+        return null;
+      }
+
+      if (min > max) {
+        var swap = min;
+        min = max;
+        max = swap;
+        minEl.value = min;
+        maxEl.value = max;
+      }
+
+      var range = max - min + 1;
+
+      if (range > 0x100000000) {
+        showStatus('err', 'The range cannot contain more than 4,294,967,296 values.');
+        return null;
+      }
+
+      if (uniqueEl.checked && count > range) {
+        showStatus('err', 'Quantity cannot exceed the number of unique values in the range.');
+        return null;
+      }
+
+      countEl.value = count;
+
+      return {
+        min: min,
+        max: max,
+        count: count,
+        unique: uniqueEl.checked
+      };
+    }
+
+    function save(settings) {
+      Taste.store.set(SAVE_KEY, settings);
+    }
+
+    function renderStats(settings) {
+      statsEl.innerHTML = '';
+
+      [
+        ['bi-arrow-left-right', settings.min + ' to ' + settings.max],
+        ['bi-list-ol', settings.count + ' generated'],
+        ['bi-shield-check', 'CSPRNG protected']
+      ].forEach(function (stat) {
+        statsEl.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + stat[0] }),
+          el('strong', { text: stat[1].split(' ')[0] }),
+          document.createTextNode(' ' + stat[1].split(' ').slice(1).join(' '))
+        ]));
+      });
+    }
+
+    function renderResults() {
+      resultsEl.innerHTML = '';
+
+      current.forEach(function (value) {
+        resultsEl.appendChild(el('li', {}, [
+          el('i', {
+            class: 'bi bi-dice-5',
+            style: 'color:var(--accent)'
+          }),
+          el('span', { text: String(value) }),
+          el('button', {
+            class: 'copy-inline',
+            type: 'button',
+            title: 'Copy',
+            onclick: function () {
+              Taste.copy(String(value));
+            }
+          }, [
+            el('i', { class: 'bi bi-clipboard' })
+          ])
+        ]));
+      });
+    }
+
+    function generate() {
+      var settings = readSettings();
+      if (!settings) return;
+
+      current = [];
+      var used = new Set();
+
+      while (current.length < settings.count) {
+        var value = randomInteger(settings.min, settings.max);
+
+        if (settings.unique) {
+          if (used.has(value)) continue;
+          used.add(value);
+        }
+
+        current.push(value);
+      }
+
+      renderStats(settings);
+      renderResults();
+      save(settings);
+      showStatus('ok', settings.count + ' secure random number' +
+        (settings.count === 1 ? '' : 's') + ' generated.');
+    }
+
+    var actions = {
+      generate: generate,
+
+      copyall: function () {
+        current.length
+          ? Taste.copy(current.join('\n'))
+          : Taste.toast('Generate some numbers first', 'info');
+      },
+
+      download: function () {
+        current.length
+          ? Taste.download('taste-random-numbers.txt', current.join('\n'))
+          : Taste.toast('Nothing to download', 'info');
+      },
+
+      sample: function () {
+        minEl.value = 1;
+        maxEl.value = 100;
+        countEl.value = 10;
+        uniqueEl.checked = true;
+        generate();
+      },
+
+      clear: function () {
+        current = [];
+        resultsEl.innerHTML = '';
+        statsEl.innerHTML = '';
+        statusEl.hidden = true;
+        Taste.store.remove(SAVE_KEY);
+      }
+    };
+
+    Taste.on(root, 'click', '[data-act]', function (event, node) {
+      event.preventDefault();
+
+      var action = actions[node.dataset.act];
+      if (action) action();
+    });
+
+    Taste.on(root, 'keydown', 'input', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        generate();
+      }
+    });
+
+    var saved = Taste.store.get(SAVE_KEY, null);
+
+    if (saved) {
+      minEl.value = saved.min ?? 1;
+      maxEl.value = saved.max ?? 100;
+      countEl.value = saved.count ?? 5;
+      uniqueEl.checked = Boolean(saved.unique);
+    }
+
+    generate();
+  };
+</script>
