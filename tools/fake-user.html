@@ -1,0 +1,448 @@
+<!-- =========================================================================
+     Project Taste — tools/fake-user.html
+     Local fake user profile generator.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-person-badge"></i></div>
+  <div class="tool-header-text">
+    <h1>Fake User Generator</h1>
+    <p>Generate realistic placeholder user profiles locally in your browser.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="fake-user-count" style="margin:0 var(--sp-2) 0 0">
+      Quantity
+    </label>
+    <input id="fake-user-count" class="input-taste" type="number"
+      min="1" max="100" value="5" style="width:90px">
+
+    <label class="field-label" for="fake-user-gender"
+      style="margin:0 var(--sp-1) 0 var(--sp-2)">
+      Names
+    </label>
+    <select id="fake-user-gender" class="select-taste" style="width:auto">
+      <option value="any" selected>Any</option>
+      <option value="female">Female</option>
+      <option value="male">Male</option>
+    </select>
+
+    <label class="check-inline">
+      <input type="checkbox" id="fake-user-json">
+      JSON preview
+    </label>
+  </div>
+
+  <div id="fake-user-status" class="fake-user-status" hidden></div>
+
+  <div class="toolbar">
+    <button class="btn-taste btn-taste-primary" data-act="generate">
+      <i class="bi bi-person-plus"></i> Generate
+    </button>
+    <button class="btn-taste btn-taste-success" data-act="copyall">
+      <i class="bi bi-clipboard-check"></i> Copy All
+    </button>
+    <button class="btn-taste btn-taste-secondary" data-act="download">
+      <i class="bi bi-download"></i> Download JSON
+    </button>
+    <button class="btn-taste btn-taste-ghost" data-act="sample">
+      <i class="bi bi-magic"></i> Sample
+    </button>
+    <button class="btn-taste btn-taste-ghost" data-act="clear">
+      <i class="bi bi-x-circle"></i> Clear
+    </button>
+  </div>
+
+  <div class="stat-row" id="fake-user-stats"></div>
+  <div id="fake-user-results" class="fake-user-results"></div>
+</div>
+
+<style>
+  .fake-user-status {
+    padding: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-3);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .fake-user-status.err {
+    background: rgba(220, 38, 38, 0.12);
+    color: var(--danger);
+  }
+
+  .fake-user-status.ok {
+    background: var(--badge-new-bg);
+    color: var(--badge-new-text);
+  }
+
+  .fake-user-results {
+    display: grid;
+    gap: var(--sp-3);
+  }
+
+  .fake-user-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--sp-3);
+    align-items: start;
+    padding: var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+  }
+
+  .fake-user-avatar {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+    font-weight: var(--fw-bold);
+  }
+
+  .fake-user-name {
+    font-weight: var(--fw-semibold);
+    color: var(--text);
+  }
+
+  .fake-user-line {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .fake-user-json {
+    grid-column: 2 / -1;
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  @media (max-width: 600px) {
+    .fake-user-card {
+      grid-template-columns: auto 1fr;
+    }
+
+    .fake-user-card .copy-inline {
+      grid-column: 2;
+      justify-self: start;
+    }
+  }
+</style>
+
+<script>
+  window.TasteTools = window.TasteTools || {};
+
+  window.TasteTools['fake-user'] = function (root, tool, Taste) {
+    'use strict';
+
+    var $ = Taste.$;
+    var el = Taste.el;
+
+    var countEl = $('#fake-user-count', root);
+    var genderEl = $('#fake-user-gender', root);
+    var jsonEl = $('#fake-user-json', root);
+    var statusEl = $('#fake-user-status', root);
+    var statsEl = $('#fake-user-stats', root);
+    var resultsEl = $('#fake-user-results', root);
+
+    var current = [];
+    var SAVE_KEY = 'tool:fake-user:settings';
+
+    var DATA = {
+      female: {
+        first: [
+          'Amelia', 'Ava', 'Charlotte', 'Chloe', 'Eleanor',
+          'Emily', 'Grace', 'Harper', 'Isabella', 'Lily',
+          'Mia', 'Nora', 'Olivia', 'Sophia', 'Victoria'
+        ],
+        last: [
+          'Anderson', 'Bennett', 'Carter', 'Collins', 'Foster',
+          'Harris', 'Hayes', 'Johnson', 'Morgan', 'Parker',
+          'Reed', 'Roberts', 'Smith', 'Taylor', 'Wilson'
+        ]
+      },
+      male: {
+        first: [
+          'Alexander', 'Benjamin', 'Daniel', 'Elijah', 'Ethan',
+          'Henry', 'James', 'Jack', 'Leo', 'Lucas',
+          'Matthew', 'Noah', 'Oliver', 'Theodore', 'William'
+        ],
+        last: [
+          'Anderson', 'Bennett', 'Carter', 'Collins', 'Foster',
+          'Harris', 'Hayes', 'Johnson', 'Morgan', 'Parker',
+          'Reed', 'Roberts', 'Smith', 'Taylor', 'Wilson'
+        ]
+      }
+    };
+
+    var CITIES = [
+      ['Austin', 'United States'],
+      ['Berlin', 'Germany'],
+      ['Chicago', 'United States'],
+      ['Dublin', 'Ireland'],
+      ['London', 'United Kingdom'],
+      ['Melbourne', 'Australia'],
+      ['New York', 'United States'],
+      ['Paris', 'France'],
+      ['Seattle', 'United States'],
+      ['Singapore', 'Singapore'],
+      ['Toronto', 'Canada'],
+      ['Vancouver', 'Canada']
+    ];
+
+    var COMPANIES = [
+      'Northstar Labs', 'Brightline Systems', 'Cedar Works',
+      'Orbit Digital', 'Pioneer Group', 'Summit Technologies',
+      'Vertex Partners', 'Willow Studio'
+    ];
+
+    var ROLES = [
+      'Product Designer', 'Software Engineer', 'Project Manager',
+      'Data Analyst', 'Marketing Specialist', 'Support Lead',
+      'QA Engineer', 'Operations Manager'
+    ];
+
+    function showStatus(kind, message) {
+      statusEl.hidden = false;
+      statusEl.className = 'fake-user-status ' + kind;
+      statusEl.innerHTML = '';
+
+      statusEl.appendChild(el('i', {
+        class: 'bi ' + (
+          kind === 'ok'
+            ? 'bi-check-circle-fill'
+            : 'bi-exclamation-triangle-fill'
+        )
+      }));
+
+      statusEl.appendChild(el('span', { text: message }));
+    }
+
+    function randomIndex(max) {
+      var limit = Math.floor(256 / max) * max;
+      var bytes = new Uint8Array(1);
+      var value;
+
+      do {
+        crypto.getRandomValues(bytes);
+        value = bytes[0];
+      } while (value >= limit);
+
+      return value % max;
+    }
+
+    function pick(values) {
+      return values[randomIndex(values.length)];
+    }
+
+    function randomNumber(min, max) {
+      return min + randomIndex(max - min + 1);
+    }
+
+    function slug(value) {
+      return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+
+    function makeEmail(first, last, index) {
+      var domains = ['example.test', 'sample.test', 'demo.test'];
+      return slug(first) + '.' + slug(last) + index + '@' + pick(domains);
+    }
+
+    function makePhone() {
+      return '+1 (555) ' +
+        String(randomNumber(100, 999)) + '-' +
+        String(randomNumber(1000, 9999));
+    }
+
+    function makeUser(index, gender) {
+      var group = gender === 'any'
+        ? pick([DATA.female, DATA.male])
+        : DATA[gender];
+
+      var first = pick(group.first);
+      var last = pick(group.last);
+      var city = pick(CITIES);
+      var birthYear = randomNumber(1970, 2002);
+      var birthMonth = String(randomNumber(1, 12)).padStart(2, '0');
+      var birthDay = String(randomNumber(1, 28)).padStart(2, '0');
+
+      return {
+        id: crypto.randomUUID
+          ? crypto.randomUUID()
+          : String(Date.now()) + '-' + index,
+        name: first + ' ' + last,
+        username: slug(first) + '_' + slug(last) + randomNumber(10, 99),
+        email: makeEmail(first, last, index + 1),
+        phone: makePhone(),
+        dateOfBirth: birthYear + '-' + birthMonth + '-' + birthDay,
+        jobTitle: pick(ROLES),
+        company: pick(COMPANIES),
+        city: city[0],
+        country: city[1]
+      };
+    }
+
+    function renderStats() {
+      statsEl.innerHTML = '';
+
+      [
+        ['bi-people', current.length + ' users'],
+        ['bi-shield-check', 'Generated locally'],
+        ['bi-database', 'Placeholder data']
+      ].forEach(function (stat) {
+        statsEl.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + stat[0] }),
+          el('strong', { text: stat[1].split(' ')[0] }),
+          document.createTextNode(' ' + stat[1].split(' ').slice(1).join(' '))
+        ]));
+      });
+    }
+
+    function renderResults() {
+      resultsEl.innerHTML = '';
+
+      if (jsonEl.checked) {
+        resultsEl.appendChild(el('textarea', {
+          class: 'textarea-taste fake-user-json',
+          readonly: true,
+          spellcheck: 'false'
+        }, [JSON.stringify(current, null, 2)]));
+
+        return;
+      }
+
+      current.forEach(function (user) {
+        var initials = user.name.split(' ').map(function (part) {
+          return part.charAt(0);
+        }).join('');
+
+        resultsEl.appendChild(el('article', {
+          class: 'fake-user-card'
+        }, [
+          el('div', {
+            class: 'fake-user-avatar',
+            text: initials
+          }),
+          el('div', {}, [
+            el('div', { class: 'fake-user-name', text: user.name }),
+            el('div', { class: 'fake-user-line', text: user.email }),
+            el('div', { class: 'fake-user-line', text: user.jobTitle + ' at ' + user.company }),
+            el('div', { class: 'fake-user-line', text: user.city + ', ' + user.country })
+          ]),
+          el('button', {
+            class: 'copy-inline',
+            type: 'button',
+            title: 'Copy user JSON',
+            onclick: function () {
+              Taste.copy(JSON.stringify(user, null, 2));
+            }
+          }, [
+            el('i', { class: 'bi bi-clipboard' })
+          ])
+        ]));
+      });
+    }
+
+    function save() {
+      Taste.store.set(SAVE_KEY, {
+        count: countEl.value,
+        gender: genderEl.value,
+        json: jsonEl.checked
+      });
+    }
+
+    function generate() {
+      var count = Math.max(1, Math.min(100, parseInt(countEl.value, 10) || 5));
+      var gender = genderEl.value;
+
+      countEl.value = count;
+      current = [];
+
+      for (var index = 0; index < count; index++) {
+        current.push(makeUser(index, gender));
+      }
+
+      renderStats();
+      renderResults();
+      save();
+      showStatus('ok', count + ' fake user profile' +
+        (count === 1 ? '' : 's') + ' generated.');
+    }
+
+    var actions = {
+      generate: generate,
+
+      copyall: function () {
+        current.length
+          ? Taste.copy(JSON.stringify(current, null, 2))
+          : Taste.toast('Generate some users first', 'info');
+      },
+
+      download: function () {
+        current.length
+          ? Taste.download(
+              'taste-fake-users.json',
+              JSON.stringify(current, null, 2),
+              'application/json'
+            )
+          : Taste.toast('Nothing to download', 'info');
+      },
+
+      sample: function () {
+        countEl.value = 3;
+        genderEl.value = 'any';
+        jsonEl.checked = false;
+        generate();
+      },
+
+      clear: function () {
+        current = [];
+        resultsEl.innerHTML = '';
+        statsEl.innerHTML = '';
+        statusEl.hidden = true;
+        Taste.store.remove(SAVE_KEY);
+      }
+    };
+
+    Taste.on(root, 'click', '[data-act]', function (event, node) {
+      event.preventDefault();
+
+      var action = actions[node.dataset.act];
+      if (action) action();
+    });
+
+    Taste.on(jsonEl, 'change', function () {
+      renderResults();
+      save();
+    });
+
+    Taste.on(root, 'change', 'select, input', save);
+
+    Taste.on(root, 'keydown', 'input', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        generate();
+      }
+    });
+
+    var saved = Taste.store.get(SAVE_KEY, null);
+
+    if (saved) {
+      countEl.value = saved.count || 5;
+      genderEl.value = saved.gender || 'any';
+      jsonEl.checked = Boolean(saved.json);
+    }
+
+    generate();
+  };
+</script>
